@@ -1,5 +1,5 @@
 // ========================================
-// 3D FPS GAME - УЛУЧШЕННАЯ ВЕРСИЯ
+// 3D FPS GAME - СУПЕР ВЕРСИЯ
 // ========================================
 
 // Игровые переменные
@@ -16,13 +16,33 @@ let player = {
     maxHealth: 100,
     isGrounded: false,
     jumpSpeed: 0.6,
-    gravity: -0.025
+    gravity: -0.025,
+    grenades: 3,
+    maxGrenades: 10,
+    abilities: {
+        shield: { active: false, duration: 5, cooldown: 20, lastUsed: 0 },
+        rage: { active: false, duration: 10, cooldown: 30, lastUsed: 0 }
+    }
+};
+
+// Система звуков
+const sounds = {
+    shoot: null,
+    reload: null,
+    explosion: null,
+    step: null,
+    music: null,
+    hit: null,
+    pickup: null,
+    enabled: true
 };
 
 // Система оружия
 let currentWeapon = 'pistol';
 let weaponModels = {};
 let hands = null;
+let grenades = [];
+let particles = [];
 
 const weapons = {
     pistol: {
@@ -32,7 +52,9 @@ const weapons = {
         maxAmmo: 12,
         fireRate: 0.3,
         reloadTime: 1.5,
-        spread: 0.02
+        spread: 0.02,
+        level: 1,
+        maxLevel: 5
     },
     rifle: {
         name: 'Автомат',
@@ -41,7 +63,9 @@ const weapons = {
         maxAmmo: 30,
         fireRate: 0.1,
         reloadTime: 2.5,
-        spread: 0.015
+        spread: 0.015,
+        level: 1,
+        maxLevel: 5
     },
     shotgun: {
         name: 'Дробовик',
@@ -51,7 +75,43 @@ const weapons = {
         fireRate: 0.8,
         reloadTime: 3.0,
         spread: 0.1,
-        pellets: 8
+        pellets: 8,
+        level: 1,
+        maxLevel: 5
+    },
+    sniper: {
+        name: 'Снайперка',
+        damage: 150,
+        ammo: 5,
+        maxAmmo: 5,
+        fireRate: 1.5,
+        reloadTime: 3.5,
+        spread: 0.001,
+        level: 1,
+        maxLevel: 5
+    },
+    grenadeLauncher: {
+        name: 'Гранатомет',
+        damage: 80,
+        ammo: 3,
+        maxAmmo: 3,
+        fireRate: 1.2,
+        reloadTime: 4.0,
+        spread: 0.05,
+        explosive: true,
+        level: 1,
+        maxLevel: 5
+    },
+    laser: {
+        name: 'Лазер',
+        damage: 20,
+        ammo: 100,
+        maxAmmo: 100,
+        fireRate: 0.05,
+        reloadTime: 2.0,
+        spread: 0.0,
+        level: 1,
+        maxLevel: 5
     }
 };
 
@@ -61,34 +121,245 @@ let bullets = [];
 let walls = [];
 let healthPacks = [];
 let floor, ceiling;
+let minimap, minimapCamera, minimapRenderer;
+
+// Настройки графики
+let graphicsSettings = {
+    quality: 'high', // low, medium, high
+    shadows: true,
+    fog: true,
+    particles: true
+};
+
+// Система карт
+const maps = {
+    default: {
+        name: 'Поле боя',
+        skyColor: 0x87CEEB,
+        floorColor: 0x3a5a1a,
+        fogDensity: 0.002,
+        lighting: { ambient: 0.5, directional: 0.8 }
+    },
+    desert: {
+        name: 'Пустыня',
+        skyColor: 0xFFD700,
+        floorColor: 0xC2B280,
+        fogDensity: 0.003,
+        lighting: { ambient: 0.7, directional: 1.0 }
+    },
+    city: {
+        name: 'Город',
+        skyColor: 0x708090,
+        floorColor: 0x555555,
+        fogDensity: 0.004,
+        lighting: { ambient: 0.4, directional: 0.6 }
+    },
+    space: {
+        name: 'Космос',
+        skyColor: 0x000033,
+        floorColor: 0x333366,
+        fogDensity: 0.001,
+        lighting: { ambient: 0.3, directional: 0.5 }
+    }
+};
+
+let currentMap = 'default';
+
+// Система достижений
+let achievements = {
+    firstKill: { unlocked: false, name: 'Первая кровь', desc: 'Убейте первого врага' },
+    killer10: { unlocked: false, name: 'Убийца', desc: 'Убейте 10 врагов' },
+    killer50: { unlocked: false, name: 'Истребитель', desc: 'Убейте 50 врагов' },
+    killer100: { unlocked: false, name: 'Терминатор', desc: 'Убейте 100 врагов' },
+    survivor5: { unlocked: false, name: 'Выживший', desc: 'Пройдите 5 раундов' },
+    survivor10: { unlocked: false, name: 'Ветеран', desc: 'Пройдите 10 раундов' },
+    headshot: { unlocked: false, name: 'Снайпер', desc: 'Убейте врага из снайперки' },
+    explosion: { unlocked: false, name: 'Подрывник', desc: 'Убейте 5 врагов гранатами' },
+    boss: { unlocked: false, name: 'Убийца боссов', desc: 'Убейте босса' },
+    perfectRound: { unlocked: false, name: 'Идеально', desc: 'Пройдите раунд без урона' }
+};
+
+// Уровни сложности
+const difficulties = {
+    easy: {
+        name: 'Легко',
+        enemyHealthMultiplier: 0.7,
+        enemySpeedMultiplier: 0.8,
+        enemyDamageMultiplier: 0.5,
+        enemyCountMultiplier: 0.8,
+        playerHealthMultiplier: 1.5
+    },
+    normal: {
+        name: 'Нормально',
+        enemyHealthMultiplier: 1.0,
+        enemySpeedMultiplier: 1.0,
+        enemyDamageMultiplier: 1.0,
+        enemyCountMultiplier: 1.0,
+        playerHealthMultiplier: 1.0
+    },
+    hard: {
+        name: 'Сложно',
+        enemyHealthMultiplier: 1.5,
+        enemySpeedMultiplier: 1.3,
+        enemyDamageMultiplier: 1.5,
+        enemyCountMultiplier: 1.3,
+        playerHealthMultiplier: 0.7
+    },
+    hardcore: {
+        name: 'Хардкор',
+        enemyHealthMultiplier: 2.0,
+        enemySpeedMultiplier: 1.5,
+        enemyDamageMultiplier: 2.0,
+        enemyCountMultiplier: 1.5,
+        playerHealthMultiplier: 0.5
+    }
+};
+
+let currentDifficulty = 'normal';
 
 let gameState = {
     score: 0,
     round: 1,
     enemiesInRound: 5,
     enemiesKilled: 0,
+    totalKills: 0,
     isPlaying: false,
     isGameOver: false,
     isPaused: false,
     isReloading: false,
     reloadStartTime: 0,
-    isTransitioningRound: false // Защита от дублирования раундов
+    isTransitioningRound: false,
+    gameMode: 'waves', // 'waves' or 'survival'
+    survivalTime: 0,
+    survivalStartTime: 0,
+    damageTakenThisRound: 0,
+    explosiveKills: 0
 };
 
 const clock = new THREE.Clock();
 let lastShootTime = 0;
+let lastStepTime = 0;
 const GROUND_LEVEL = 0;
 
 // ========================================
 // ИНИЦИАЛИЗАЦИЯ
 // ========================================
 
+function initSounds() {
+    try {
+        // Создание простых звуков с помощью Web Audio API
+        const AudioContext = window.AudioContext || window.webkitAudioContext;
+        const audioContext = new AudioContext();
+        
+        // Функция для создания звука выстрела
+        sounds.shoot = () => {
+            if (!sounds.enabled) return;
+            const oscillator = audioContext.createOscillator();
+            const gainNode = audioContext.createGain();
+            oscillator.connect(gainNode);
+            gainNode.connect(audioContext.destination);
+            oscillator.frequency.value = 200;
+            oscillator.type = 'sawtooth';
+            gainNode.gain.setValueAtTime(0.3, audioContext.currentTime);
+            gainNode.gain.exponentialRampToValueAtTime(0.01, audioContext.currentTime + 0.1);
+            oscillator.start(audioContext.currentTime);
+            oscillator.stop(audioContext.currentTime + 0.1);
+        };
+        
+        // Звук взрыва
+        sounds.explosion = () => {
+            if (!sounds.enabled) return;
+            const oscillator = audioContext.createOscillator();
+            const gainNode = audioContext.createGain();
+            oscillator.connect(gainNode);
+            gainNode.connect(audioContext.destination);
+            oscillator.frequency.value = 50;
+            oscillator.type = 'sawtooth';
+            gainNode.gain.setValueAtTime(0.5, audioContext.currentTime);
+            gainNode.gain.exponentialRampToValueAtTime(0.01, audioContext.currentTime + 0.5);
+            oscillator.start(audioContext.currentTime);
+            oscillator.stop(audioContext.currentTime + 0.5);
+        };
+        
+        // Звук попадания
+        sounds.hit = () => {
+            if (!sounds.enabled) return;
+            const oscillator = audioContext.createOscillator();
+            const gainNode = audioContext.createGain();
+            oscillator.connect(gainNode);
+            gainNode.connect(audioContext.destination);
+            oscillator.frequency.value = 400;
+            oscillator.type = 'square';
+            gainNode.gain.setValueAtTime(0.2, audioContext.currentTime);
+            gainNode.gain.exponentialRampToValueAtTime(0.01, audioContext.currentTime + 0.05);
+            oscillator.start(audioContext.currentTime);
+            oscillator.stop(audioContext.currentTime + 0.05);
+        };
+        
+        // Звук подбора
+        sounds.pickup = () => {
+            if (!sounds.enabled) return;
+            const oscillator = audioContext.createOscillator();
+            const gainNode = audioContext.createGain();
+            oscillator.connect(gainNode);
+            gainNode.connect(audioContext.destination);
+            oscillator.frequency.value = 800;
+            oscillator.type = 'sine';
+            gainNode.gain.setValueAtTime(0.3, audioContext.currentTime);
+            gainNode.gain.exponentialRampToValueAtTime(0.01, audioContext.currentTime + 0.2);
+            oscillator.start(audioContext.currentTime);
+            oscillator.stop(audioContext.currentTime + 0.2);
+        };
+        
+        // Звук шагов
+        sounds.step = () => {
+            if (!sounds.enabled) return;
+            const oscillator = audioContext.createOscillator();
+            const gainNode = audioContext.createGain();
+            oscillator.connect(gainNode);
+            gainNode.connect(audioContext.destination);
+            oscillator.frequency.value = 100;
+            oscillator.type = 'square';
+            gainNode.gain.setValueAtTime(0.1, audioContext.currentTime);
+            gainNode.gain.exponentialRampToValueAtTime(0.01, audioContext.currentTime + 0.05);
+            oscillator.start(audioContext.currentTime);
+            oscillator.stop(audioContext.currentTime + 0.05);
+        };
+        
+        // Звук перезарядки
+        sounds.reload = () => {
+            if (!sounds.enabled) return;
+            const oscillator = audioContext.createOscillator();
+            const gainNode = audioContext.createGain();
+            oscillator.connect(gainNode);
+            gainNode.connect(audioContext.destination);
+            oscillator.frequency.value = 300;
+            oscillator.type = 'sine';
+            gainNode.gain.setValueAtTime(0.2, audioContext.currentTime);
+            gainNode.gain.exponentialRampToValueAtTime(0.01, audioContext.currentTime + 0.3);
+            oscillator.start(audioContext.currentTime);
+            oscillator.stop(audioContext.currentTime + 0.3);
+        };
+        
+        console.log('🔊 Звуковая система инициализирована');
+    } catch (e) {
+        console.warn('⚠️ Не удалось инициализировать звуки:', e);
+    }
+}
+
 function init() {
     scene = new THREE.Scene();
     
+    // Инициализация звуков
+    initSounds();
+    
+    // Загрузка сохраненных настроек
+    loadSettings();
+    loadAchievements();
+    
     // Создание Skybox
     createSkybox();
-    scene.fog = new THREE.FogExp2(0x87CEEB, 0.002);
+    applyMapSettings();
 
     // Камера
     camera = new THREE.PerspectiveCamera(
@@ -101,9 +372,12 @@ function init() {
 
     // Рендерер
     const canvas = document.getElementById('gameCanvas');
-    renderer = new THREE.WebGLRenderer({ canvas, antialias: true });
+    renderer = new THREE.WebGLRenderer({ 
+        canvas, 
+        antialias: graphicsSettings.quality !== 'low'
+    });
     renderer.setSize(window.innerWidth, window.innerHeight);
-    renderer.shadowMap.enabled = true;
+    renderer.shadowMap.enabled = graphicsSettings.shadows;
     renderer.shadowMap.type = THREE.PCFSoftShadowMap;
     renderer.toneMapping = THREE.ACESFilmicToneMapping;
     renderer.toneMappingExposure = 1.0;
@@ -123,12 +397,166 @@ function init() {
 
     // Создание врагов
     startRound();
+    
+    // Создание миникарты
+    createMinimap();
 
     // Обработчики событий
     setupEventListeners();
 
     // Запуск игрового цикла
     animate();
+}
+
+// ========================================
+// СИСТЕМА СОХРАНЕНИЯ И ЗАГРУЗКИ
+// ========================================
+
+function loadSettings() {
+    try {
+        const saved = localStorage.getItem('fps_settings');
+        if (saved) {
+            const settings = JSON.parse(saved);
+            graphicsSettings = {...graphicsSettings, ...settings.graphics};
+            currentDifficulty = settings.difficulty || 'normal';
+            currentMap = settings.map || 'default';
+            sounds.enabled = settings.soundEnabled !== false;
+        }
+    } catch (e) {
+        console.warn('Не удалось загрузить настройки:', e);
+    }
+}
+
+function saveSettings() {
+    try {
+        const settings = {
+            graphics: graphicsSettings,
+            difficulty: currentDifficulty,
+            map: currentMap,
+            soundEnabled: sounds.enabled
+        };
+        localStorage.setItem('fps_settings', JSON.stringify(settings));
+    } catch (e) {
+        console.warn('Не удалось сохранить настройки:', e);
+    }
+}
+
+function loadAchievements() {
+    try {
+        const saved = localStorage.getItem('fps_achievements');
+        if (saved) {
+            const savedAchievements = JSON.parse(saved);
+            Object.keys(savedAchievements).forEach(key => {
+                if (achievements[key]) {
+                    achievements[key].unlocked = savedAchievements[key].unlocked;
+                }
+            });
+        }
+    } catch (e) {
+        console.warn('Не удалось загрузить достижения:', e);
+    }
+}
+
+function saveAchievements() {
+    try {
+        localStorage.setItem('fps_achievements', JSON.stringify(achievements));
+    } catch (e) {
+        console.warn('Не удалось сохранить достижения:', e);
+    }
+}
+
+function unlockAchievement(key) {
+    if (achievements[key] && !achievements[key].unlocked) {
+        achievements[key].unlocked = true;
+        showAchievementNotification(achievements[key]);
+        saveAchievements();
+    }
+}
+
+function showAchievementNotification(achievement) {
+    const notification = document.createElement('div');
+    notification.style.cssText = `
+        position: fixed;
+        top: 100px;
+        right: 20px;
+        background: rgba(255, 215, 0, 0.95);
+        color: black;
+        padding: 20px;
+        border-radius: 10px;
+        font-weight: bold;
+        z-index: 10000;
+        animation: slideIn 0.5s;
+        border: 3px solid gold;
+    `;
+    notification.innerHTML = `
+        <div style="font-size: 18px;">🏆 ДОСТИЖЕНИЕ!</div>
+        <div style="font-size: 16px; margin-top: 5px;">${achievement.name}</div>
+        <div style="font-size: 12px; margin-top: 3px; opacity: 0.8;">${achievement.desc}</div>
+    `;
+    document.body.appendChild(notification);
+    
+    setTimeout(() => {
+        notification.style.animation = 'slideOut 0.5s';
+        setTimeout(() => document.body.removeChild(notification), 500);
+    }, 3000);
+}
+
+function checkAchievements() {
+    if (gameState.totalKills === 1) unlockAchievement('firstKill');
+    if (gameState.totalKills === 10) unlockAchievement('killer10');
+    if (gameState.totalKills === 50) unlockAchievement('killer50');
+    if (gameState.totalKills === 100) unlockAchievement('killer100');
+    if (gameState.round === 5) unlockAchievement('survivor5');
+    if (gameState.round === 10) unlockAchievement('survivor10');
+    if (gameState.explosiveKills >= 5) unlockAchievement('explosion');
+    if (gameState.damageTakenThisRound === 0 && gameState.enemiesKilled > 0) {
+        unlockAchievement('perfectRound');
+    }
+}
+
+// Таблица рекордов
+function saveHighScore() {
+    try {
+        const scores = getHighScores();
+        scores.push({
+            score: gameState.score,
+            round: gameState.round,
+            kills: gameState.totalKills,
+            difficulty: currentDifficulty,
+            date: new Date().toLocaleDateString()
+        });
+        scores.sort((a, b) => b.score - a.score);
+        const top10 = scores.slice(0, 10);
+        localStorage.setItem('fps_highscores', JSON.stringify(top10));
+    } catch (e) {
+        console.warn('Не удалось сохранить рекорд:', e);
+    }
+}
+
+function getHighScores() {
+    try {
+        const saved = localStorage.getItem('fps_highscores');
+        return saved ? JSON.parse(saved) : [];
+    } catch (e) {
+        return [];
+    }
+}
+
+function applyMapSettings() {
+    const map = maps[currentMap];
+    scene.background = new THREE.Color(map.skyColor);
+    if (graphicsSettings.fog) {
+        scene.fog = new THREE.FogExp2(map.skyColor, map.fogDensity);
+    } else {
+        scene.fog = null;
+    }
+}
+
+function createMinimap() {
+    // Создание миникамеры (вид сверху)
+    minimapCamera = new THREE.OrthographicCamera(-100, 100, 100, -100, 0, 500);
+    minimapCamera.position.set(0, 200, 0);
+    minimapCamera.lookAt(0, 0, 0);
 }
 
 function setupLighting() {
@@ -365,110 +793,132 @@ function createHands() {
 }
 
 function createWeaponModels() {
-    // ПИСТОЛЕТ (меньше и дальше от камеры)
+    // ПИСТОЛЕТ
     const pistol = new THREE.Group();
-    
     const pistolBody = new THREE.Mesh(
         new THREE.BoxGeometry(0.3, 0.5, 1.2),
-        new THREE.MeshStandardMaterial({ 
-            color: 0x333333, 
-            metalness: 0.8, 
-            roughness: 0.3 
-        })
+        new THREE.MeshStandardMaterial({ color: 0x333333, metalness: 0.8, roughness: 0.3 })
     );
     pistolBody.position.set(0.3, -1.2, -3.5);
     pistol.add(pistolBody);
-    
     const pistolBarrel = new THREE.Mesh(
         new THREE.CylinderGeometry(0.08, 0.08, 0.8, 8),
-        new THREE.MeshStandardMaterial({ 
-            color: 0x111111, 
-            metalness: 0.9, 
-            roughness: 0.2 
-        })
+        new THREE.MeshStandardMaterial({ color: 0x111111, metalness: 0.9, roughness: 0.2 })
     );
     pistolBarrel.rotation.x = Math.PI / 2;
     pistolBarrel.position.set(0.3, -1.1, -4.5);
     pistol.add(pistolBarrel);
-    
     weaponModels.pistol = pistol;
     
-    // АВТОМАТ (меньше и дальше)
+    // АВТОМАТ
     const rifle = new THREE.Group();
-    
     const rifleBody = new THREE.Mesh(
         new THREE.BoxGeometry(0.4, 0.4, 2.5),
-        new THREE.MeshStandardMaterial({ 
-            color: 0x2a2a2a, 
-            metalness: 0.7, 
-            roughness: 0.4 
-        })
+        new THREE.MeshStandardMaterial({ color: 0x2a2a2a, metalness: 0.7, roughness: 0.4 })
     );
     rifleBody.position.set(0.2, -1.2, -4);
     rifle.add(rifleBody);
-    
     const rifleBarrel = new THREE.Mesh(
         new THREE.CylinderGeometry(0.06, 0.06, 1.5, 8),
-        new THREE.MeshStandardMaterial({ 
-            color: 0x111111, 
-            metalness: 0.9, 
-            roughness: 0.1 
-        })
+        new THREE.MeshStandardMaterial({ color: 0x111111, metalness: 0.9, roughness: 0.1 })
     );
     rifleBarrel.rotation.x = Math.PI / 2;
     rifleBarrel.position.set(0.2, -1.0, -5.5);
     rifle.add(rifleBarrel);
-    
     const rifleStock = new THREE.Mesh(
         new THREE.BoxGeometry(0.3, 0.3, 0.8),
-        new THREE.MeshStandardMaterial({ 
-            color: 0x8B4513, 
-            roughness: 0.8 
-        })
+        new THREE.MeshStandardMaterial({ color: 0x8B4513, roughness: 0.8 })
     );
     rifleStock.position.set(0.2, -1.2, -2.5);
     rifle.add(rifleStock);
-    
-    const rifleScope = new THREE.Mesh(
-        new THREE.CylinderGeometry(0.1, 0.1, 0.8, 8),
-        new THREE.MeshStandardMaterial({ 
-            color: 0x444444, 
-            metalness: 0.8,
-            roughness: 0.3
-        })
-    );
-    rifleScope.rotation.z = Math.PI / 2;
-    rifleScope.position.set(0.2, -0.7, -3.5);
-    rifle.add(rifleScope);
-    
     weaponModels.rifle = rifle;
     
-    // ДРОБОВИК (меньше и дальше)
+    // ДРОБОВИК
     const shotgun = new THREE.Group();
-    
     const shotgunBody = new THREE.Mesh(
         new THREE.BoxGeometry(0.5, 0.5, 2.2),
-        new THREE.MeshStandardMaterial({ 
-            color: 0x654321, 
-            roughness: 0.7 
-        })
+        new THREE.MeshStandardMaterial({ color: 0x654321, roughness: 0.7 })
     );
     shotgunBody.position.set(0.3, -1.3, -3.5);
     shotgun.add(shotgunBody);
-    
     const shotgunBarrel = new THREE.Mesh(
         new THREE.CylinderGeometry(0.12, 0.12, 1.5, 8),
-        new THREE.MeshStandardMaterial({ 
-            color: 0x333333, 
-            metalness: 0.8, 
-            roughness: 0.3 
-        })
+        new THREE.MeshStandardMaterial({ color: 0x333333, metalness: 0.8, roughness: 0.3 })
     );
     shotgunBarrel.rotation.x = Math.PI / 2;
     shotgunBarrel.position.set(0.3, -1.1, -5);
     shotgun.add(shotgunBarrel);
-    
     weaponModels.shotgun = shotgun;
+    
+    // СНАЙПЕРКА
+    const sniper = new THREE.Group();
+    const sniperBody = new THREE.Mesh(
+        new THREE.BoxGeometry(0.35, 0.35, 3.0),
+        new THREE.MeshStandardMaterial({ color: 0x1a1a1a, metalness: 0.9, roughness: 0.2 })
+    );
+    sniperBody.position.set(0.2, -1.2, -4.5);
+    sniper.add(sniperBody);
+    const sniperBarrel = new THREE.Mesh(
+        new THREE.CylinderGeometry(0.05, 0.05, 2.0, 8),
+        new THREE.MeshStandardMaterial({ color: 0x000000, metalness: 1.0, roughness: 0.1 })
+    );
+    sniperBarrel.rotation.x = Math.PI / 2;
+    sniperBarrel.position.set(0.2, -1.0, -6.5);
+    sniper.add(sniperBarrel);
+    const sniperScope = new THREE.Mesh(
+        new THREE.CylinderGeometry(0.15, 0.15, 1.2, 16),
+        new THREE.MeshStandardMaterial({ color: 0x222222, metalness: 0.8, roughness: 0.2 })
+    );
+    sniperScope.rotation.z = Math.PI / 2;
+    sniperScope.position.set(0.2, -0.6, -4);
+    sniper.add(sniperScope);
+    weaponModels.sniper = sniper;
+    
+    // ГРАНАТОМЕТ
+    const grenadeLauncher = new THREE.Group();
+    const glBody = new THREE.Mesh(
+        new THREE.BoxGeometry(0.6, 0.6, 2.0),
+        new THREE.MeshStandardMaterial({ color: 0x4a4a2a, metalness: 0.6, roughness: 0.5 })
+    );
+    glBody.position.set(0.3, -1.3, -3.5);
+    grenadeLauncher.add(glBody);
+    const glBarrel = new THREE.Mesh(
+        new THREE.CylinderGeometry(0.2, 0.2, 1.8, 12),
+        new THREE.MeshStandardMaterial({ color: 0x2a2a1a, metalness: 0.7, roughness: 0.4 })
+    );
+    glBarrel.rotation.x = Math.PI / 2;
+    glBarrel.position.set(0.3, -1.1, -5.5);
+    grenadeLauncher.add(glBarrel);
+    weaponModels.grenadeLauncher = grenadeLauncher;
+    
+    // ЛАЗЕР
+    const laser = new THREE.Group();
+    const laserBody = new THREE.Mesh(
+        new THREE.BoxGeometry(0.4, 0.4, 2.0),
+        new THREE.MeshStandardMaterial({ 
+            color: 0x0088ff, 
+            metalness: 1.0, 
+            roughness: 0.1,
+            emissive: 0x0044aa,
+            emissiveIntensity: 0.5
+        })
+    );
+    laserBody.position.set(0.2, -1.2, -3.5);
+    laser.add(laserBody);
+    const laserCore = new THREE.Mesh(
+        new THREE.CylinderGeometry(0.08, 0.08, 1.5, 8),
+        new THREE.MeshStandardMaterial({ 
+            color: 0x00ffff, 
+            metalness: 1.0, 
+            roughness: 0.0,
+            emissive: 0x00ffff,
+            emissiveIntensity: 1.0
+        })
+    );
+    laserCore.rotation.x = Math.PI / 2;
+    laserCore.position.set(0.2, -1.0, -5.0);
+    laser.add(laserCore);
+    weaponModels.laser = laser;
 }
 
 function switchWeapon(weaponName) {
@@ -496,6 +946,7 @@ function startRound() {
     
     gameState.enemiesKilled = 0;
     gameState.enemiesInRound = 5 + (gameState.round - 1) * 3;
+    gameState.damageTakenThisRound = 0; // Сброс для достижения "Идеально"
     
     console.log(`Создаем ${gameState.enemiesInRound} врагов для раунда ${gameState.round}`);
     
@@ -503,6 +954,9 @@ function startRound() {
     
     // Показываем уведомление о раунде
     showRoundNotification();
+    
+    // Проверяем достижение выживания
+    checkAchievements();
 }
 
 function showRoundNotification() {
@@ -554,78 +1008,160 @@ function checkRoundComplete() {
 // СОЗДАНИЕ ВРАГОВ
 // ========================================
 
-function createEnemyModel() {
+function createEnemyModel(type = 'normal') {
     const enemyGroup = new THREE.Group();
     
-    const bodyGeometry = new THREE.BoxGeometry(4, 6, 3);
+    let bodyColor, emissiveColor, size, heightMultiplier;
+    
+    switch(type) {
+        case 'fast':
+            bodyColor = 0xff00ff;
+            emissiveColor = 0x440044;
+            size = 0.8;
+            heightMultiplier = 0.9;
+            break;
+        case 'tank':
+            bodyColor = 0x00ff00;
+            emissiveColor = 0x004400;
+            size = 1.5;
+            heightMultiplier = 1.2;
+            break;
+        case 'flying':
+            bodyColor = 0x00ffff;
+            emissiveColor = 0x004444;
+            size = 0.9;
+            heightMultiplier = 0.8;
+            break;
+        case 'boss':
+            bodyColor = 0xffaa00;
+            emissiveColor = 0x442200;
+            size = 2.0;
+            heightMultiplier = 1.5;
+            break;
+        default: // normal
+            bodyColor = 0xff0000;
+            emissiveColor = 0x440000;
+            size = 1.0;
+            heightMultiplier = 1.0;
+    }
+    
+    const bodyGeometry = new THREE.BoxGeometry(4 * size, 6 * heightMultiplier, 3 * size);
     const bodyMaterial = new THREE.MeshStandardMaterial({
-        color: 0xff0000,
-        emissive: 0x440000,
+        color: bodyColor,
+        emissive: emissiveColor,
         roughness: 0.3,
         metalness: 0.7
     });
     const body = new THREE.Mesh(bodyGeometry, bodyMaterial);
-    body.position.y = 3;
+    body.position.y = 3 * heightMultiplier;
     body.castShadow = true;
     enemyGroup.add(body);
     
-    const headGeometry = new THREE.BoxGeometry(3, 3, 3);
+    // Добавление пропеллеров для летающих врагов
+    if (type === 'flying') {
+        const propeller = new THREE.Mesh(
+            new THREE.CylinderGeometry(3, 3, 0.5, 16),
+            new THREE.MeshStandardMaterial({ 
+                color: 0x888888, 
+                metalness: 0.9, 
+                roughness: 0.1 
+            })
+        );
+        propeller.position.y = 7;
+        propeller.rotation.x = Math.PI / 2;
+        enemyGroup.add(propeller);
+        enemyGroup.userData.propeller = propeller;
+    }
+    
+    // Добавление брони для танков
+    if (type === 'tank') {
+        const armor = new THREE.Mesh(
+            new THREE.BoxGeometry(5 * size, 7 * heightMultiplier, 4 * size),
+            new THREE.MeshStandardMaterial({ 
+                color: 0x333333, 
+                metalness: 0.9, 
+                roughness: 0.2,
+                transparent: true,
+                opacity: 0.5
+            })
+        );
+        armor.position.y = 3 * heightMultiplier;
+        enemyGroup.add(armor);
+    }
+    
+    // Добавление короны для боссов
+    if (type === 'boss') {
+        const crown = new THREE.Mesh(
+            new THREE.ConeGeometry(2, 3, 6),
+            new THREE.MeshStandardMaterial({ 
+                color: 0xFFD700, 
+                metalness: 1.0, 
+                roughness: 0.1,
+                emissive: 0xFFD700,
+                emissiveIntensity: 0.5
+            })
+        );
+        crown.position.y = 10;
+        enemyGroup.add(crown);
+    }
+    
+    const headGeometry = new THREE.BoxGeometry(3 * size, 3 * size, 3 * size);
     const headMaterial = new THREE.MeshStandardMaterial({
-        color: 0xcc0000,
-        emissive: 0x330000,
+        color: type === 'boss' ? 0xffaa00 : (type === 'tank' ? 0x00cc00 : (type === 'fast' ? 0xff00ff : 0xcc0000)),
+        emissive: emissiveColor,
         roughness: 0.4,
         metalness: 0.6
     });
     const head = new THREE.Mesh(headGeometry, headMaterial);
-    head.position.y = 7.5;
+    head.position.y = 7.5 * heightMultiplier;
     head.castShadow = true;
     enemyGroup.add(head);
     
-    const eyeGeometry = new THREE.SphereGeometry(0.4, 8, 8);
+    const eyeGeometry = new THREE.SphereGeometry(0.4 * size, 8, 8);
     const eyeMaterial = new THREE.MeshBasicMaterial({
         color: 0xffff00,
         emissive: 0xffff00
     });
     
     const leftEye = new THREE.Mesh(eyeGeometry, eyeMaterial);
-    leftEye.position.set(-0.8, 7.5, 1.6);
+    leftEye.position.set(-0.8 * size, 7.5 * heightMultiplier, 1.6 * size);
     enemyGroup.add(leftEye);
     
     const rightEye = new THREE.Mesh(eyeGeometry, eyeMaterial);
-    rightEye.position.set(0.8, 7.5, 1.6);
+    rightEye.position.set(0.8 * size, 7.5 * heightMultiplier, 1.6 * size);
     enemyGroup.add(rightEye);
     
-    const armGeometry = new THREE.BoxGeometry(1, 4, 1);
+    const armGeometry = new THREE.BoxGeometry(1 * size, 4 * heightMultiplier, 1 * size);
     const armMaterial = new THREE.MeshStandardMaterial({
-        color: 0x990000,
+        color: type === 'boss' ? 0x996600 : (type === 'tank' ? 0x009900 : (type === 'fast' ? 0x990099 : 0x990000)),
         roughness: 0.5,
         metalness: 0.5
     });
     
     const leftArm = new THREE.Mesh(armGeometry, armMaterial);
-    leftArm.position.set(-3, 3, 0);
+    leftArm.position.set(-3 * size, 3 * heightMultiplier, 0);
     leftArm.castShadow = true;
     enemyGroup.add(leftArm);
     
     const rightArm = new THREE.Mesh(armGeometry, armMaterial);
-    rightArm.position.set(3, 3, 0);
+    rightArm.position.set(3 * size, 3 * heightMultiplier, 0);
     rightArm.castShadow = true;
     enemyGroup.add(rightArm);
     
-    const legGeometry = new THREE.BoxGeometry(1.5, 3, 1.5);
+    const legGeometry = new THREE.BoxGeometry(1.5 * size, 3 * heightMultiplier, 1.5 * size);
     const legMaterial = new THREE.MeshStandardMaterial({
-        color: 0x880000,
+        color: type === 'boss' ? 0x885500 : (type === 'tank' ? 0x008800 : (type === 'fast' ? 0x880088 : 0x880000)),
         roughness: 0.6,
         metalness: 0.4
     });
     
     const leftLeg = new THREE.Mesh(legGeometry, legMaterial);
-    leftLeg.position.set(-1, -1.5, 0);
+    leftLeg.position.set(-1 * size, -1.5 * heightMultiplier, 0);
     leftLeg.castShadow = true;
     enemyGroup.add(leftLeg);
     
     const rightLeg = new THREE.Mesh(legGeometry, legMaterial);
-    rightLeg.position.set(1, -1.5, 0);
+    rightLeg.position.set(1 * size, -1.5 * heightMultiplier, 0);
     rightLeg.castShadow = true;
     enemyGroup.add(rightLeg);
     
@@ -670,7 +1206,7 @@ function createEnemyModel() {
     weaponGroup.add(magazine);
     
     // Позиция оружия в правой руке
-    weaponGroup.position.set(4, 2, 2);
+    weaponGroup.position.set(4 * size, 2 * heightMultiplier, 2 * size);
     weaponGroup.rotation.y = -Math.PI / 4;
     weaponGroup.rotation.x = -Math.PI / 8;
     weaponGroup.castShadow = true;
@@ -680,11 +1216,16 @@ function createEnemyModel() {
         body, head, leftArm, rightArm, leftLeg, rightLeg, leftEye, rightEye, weapon: weaponGroup
     };
     
+    enemyGroup.userData.enemyType = type;
+    
     return enemyGroup;
 }
 
 function createEnemies(count) {
-    for (let i = 0; i < count; i++) {
+    const difficulty = difficulties[currentDifficulty];
+    const adjustedCount = Math.floor(count * difficulty.enemyCountMultiplier);
+    
+    for (let i = 0; i < adjustedCount; i++) {
         let x, z, validPosition;
         
         do {
@@ -695,21 +1236,69 @@ function createEnemies(count) {
             validPosition = distance > 40 && !checkCollision(testPos);
         } while (!validPosition);
 
-        const enemy = createEnemyModel();
-        enemy.position.set(x, GROUND_LEVEL + 4, z);
+        // Определяем тип врага на основе раунда
+        let enemyType = 'normal';
+        const rand = Math.random();
         
-        const health = 100 + (gameState.round - 1) * 20;
-        const speed = 0.08 + (gameState.round - 1) * 0.01;
+        if (gameState.round >= 10 && rand < 0.1) {
+            enemyType = 'boss';
+        } else if (gameState.round >= 7) {
+            if (rand < 0.2) enemyType = 'fast';
+            else if (rand < 0.4) enemyType = 'tank';
+            else if (rand < 0.6) enemyType = 'flying';
+        } else if (gameState.round >= 5) {
+            if (rand < 0.25) enemyType = 'fast';
+            else if (rand < 0.5) enemyType = 'tank';
+        } else if (gameState.round >= 3) {
+            if (rand < 0.3) enemyType = 'fast';
+        }
+
+        const enemy = createEnemyModel(enemyType);
+        
+        // Позиция (летающие враги выше)
+        const yPos = enemyType === 'flying' ? GROUND_LEVEL + 15 : GROUND_LEVEL + 4;
+        enemy.position.set(x, yPos, z);
+        
+        // Характеристики в зависимости от типа и сложности
+        let baseHealth = 100 + (gameState.round - 1) * 20;
+        let baseSpeed = 0.08 + (gameState.round - 1) * 0.01;
+        let baseDamage = 15 + gameState.round * 2;
+        
+        switch(enemyType) {
+            case 'fast':
+                baseHealth *= 0.6;
+                baseSpeed *= 2.0;
+                baseDamage *= 0.7;
+                break;
+            case 'tank':
+                baseHealth *= 3.0;
+                baseSpeed *= 0.5;
+                baseDamage *= 1.5;
+                break;
+            case 'flying':
+                baseHealth *= 0.8;
+                baseSpeed *= 1.5;
+                baseDamage *= 1.0;
+                break;
+            case 'boss':
+                baseHealth *= 10.0;
+                baseSpeed *= 0.7;
+                baseDamage *= 3.0;
+                break;
+        }
         
         enemy.userData = {
-            health: health,
-            maxHealth: health,
-            speed: speed,
+            ...enemy.userData,
+            health: baseHealth * difficulty.enemyHealthMultiplier,
+            maxHealth: baseHealth * difficulty.enemyHealthMultiplier,
+            speed: baseSpeed * difficulty.enemySpeedMultiplier,
+            damage: baseDamage * difficulty.enemyDamageMultiplier,
             detectionRadius: 60,
-            attackRadius: 10,
+            attackRadius: enemyType === 'boss' ? 15 : 10,
             lastAttackTime: 0,
-            attackCooldown: 2,
-            animationOffset: Math.random() * Math.PI * 2
+            attackCooldown: enemyType === 'fast' ? 1.5 : (enemyType === 'boss' ? 1.0 : 2.0),
+            animationOffset: Math.random() * Math.PI * 2,
+            isBoss: enemyType === 'boss'
         };
         
         scene.add(enemy);
@@ -747,6 +1336,27 @@ function setupEventListeners() {
         if (e.key === '1') switchWeapon('pistol');
         if (e.key === '2') switchWeapon('rifle');
         if (e.key === '3') switchWeapon('shotgun');
+        if (e.key === '4') switchWeapon('sniper');
+        if (e.key === '5') switchWeapon('grenadeLauncher');
+        if (e.key === '6') switchWeapon('laser');
+        
+        // Гранаты
+        if (key === 'g' && gameState.isPlaying && !gameState.isPaused) {
+            throwGrenade();
+        }
+        
+        // Способности
+        if (key === 'q' && gameState.isPlaying && !gameState.isPaused) {
+            activateShield();
+        }
+        if (key === 'e' && gameState.isPlaying && !gameState.isPaused) {
+            activateRage();
+        }
+        
+        // Апгрейд оружия (на паузе)
+        if (key === 'u' && gameState.isPaused) {
+            upgradeWeapon();
+        }
         
         // Пауза
         if (e.key === 'Escape') {
@@ -778,8 +1388,89 @@ function setupEventListeners() {
     document.getElementById('restartButton').addEventListener('click', restartGame);
     document.getElementById('resumeButton').addEventListener('click', togglePause);
     document.getElementById('mainMenuButton').addEventListener('click', returnToMenu);
+    
+    // Новые обработчики
+    const achievementsBtn = document.getElementById('viewAchievementsButton');
+    if (achievementsBtn) {
+        achievementsBtn.addEventListener('click', showAchievements);
+    }
+    
+    const scoresBtn = document.getElementById('viewScoresButton');
+    if (scoresBtn) {
+        scoresBtn.addEventListener('click', showLeaderboard);
+    }
 
     window.addEventListener('resize', onWindowResize);
+}
+
+function showAchievements() {
+    const modal = document.getElementById('achievementsModal');
+    const list = document.getElementById('achievementsList');
+    
+    list.innerHTML = '';
+    
+    Object.keys(achievements).forEach(key => {
+        const ach = achievements[key];
+        const div = document.createElement('div');
+        div.style.cssText = `
+            background: ${ach.unlocked ? 'rgba(0,255,0,0.2)' : 'rgba(100,100,100,0.2)'};
+            padding: 15px;
+            margin: 10px 0;
+            border-radius: 8px;
+            border-left: 4px solid ${ach.unlocked ? '#0f0' : '#555'};
+        `;
+        div.innerHTML = `
+            <div style="font-size: 18px; color: ${ach.unlocked ? '#ffd700' : '#999'};">
+                ${ach.unlocked ? '✅' : '🔒'} <strong>${ach.name}</strong>
+            </div>
+            <div style="font-size: 14px; color: ${ach.unlocked ? '#fff' : '#888'}; margin-top: 5px;">
+                ${ach.desc}
+            </div>
+        `;
+        list.appendChild(div);
+    });
+    
+    modal.style.display = 'block';
+}
+
+function showLeaderboard() {
+    const modal = document.getElementById('scoresModal');
+    const list = document.getElementById('scoresList');
+    
+    const scores = getHighScores();
+    
+    list.innerHTML = '';
+    
+    if (scores.length === 0) {
+        list.innerHTML = '<p style="color: #888; text-align: center;">Пока нет рекордов. Сыграйте первую игру!</p>';
+    } else {
+        scores.forEach((score, index) => {
+            const div = document.createElement('div');
+            const medal = index === 0 ? '🥇' : (index === 1 ? '🥈' : (index === 2 ? '🥉' : `${index + 1}.`));
+            div.style.cssText = `
+                background: rgba(0,100,200,0.2);
+                padding: 12px;
+                margin: 8px 0;
+                border-radius: 8px;
+                border-left: 4px solid ${index < 3 ? '#ffd700' : '#0088ff'};
+            `;
+            div.innerHTML = `
+                <div style="display: flex; justify-content: space-between; align-items: center;">
+                    <div>
+                        <span style="font-size: 20px;">${medal}</span>
+                        <span style="font-size: 18px; color: #0ff; margin-left: 10px;">${score.score} очков</span>
+                    </div>
+                    <div style="text-align: right; font-size: 14px;">
+                        <div style="color: #fff;">Раунд ${score.round} | ${score.kills} убийств</div>
+                        <div style="color: #888;">${score.difficulty} | ${score.date}</div>
+                    </div>
+                </div>
+            `;
+            list.appendChild(div);
+        });
+    }
+    
+    modal.style.display = 'block';
 }
 
 function startGame() {
@@ -792,6 +1483,12 @@ function startGame() {
     gameState.isPaused = false;
     gameState.isGameOver = false;
     gameState.isReloading = false;
+    gameState.survivalStartTime = clock.getElapsedTime();
+    
+    // Применение сложности к здоровью игрока
+    const difficulty = difficulties[currentDifficulty];
+    player.maxHealth = Math.floor(100 * difficulty.playerHealthMultiplier);
+    player.health = player.maxHealth;
     
     // Очистка клавиш
     keys = {};
@@ -806,6 +1503,8 @@ function startGame() {
     
     console.log('Состояние игры:', gameState);
     console.log('Позиция игрока:', player.position);
+    console.log(`Сложность: ${difficulties[currentDifficulty].name}`);
+    console.log(`Карта: ${maps[currentMap].name}`);
     console.log('🎮 Игра запущена! Нажимайте WASD для движения');
     console.log('Если не работает - проверьте, что курсор захвачен (кликните ЛКМ)');
     
@@ -846,10 +1545,29 @@ function togglePause() {
     gameState.isPaused = !gameState.isPaused;
     
     if (gameState.isPaused) {
+        // Обновляем информацию в меню паузы
+        const pauseScore = document.getElementById('pauseScore');
+        const pauseRound = document.getElementById('pauseRound');
+        const pauseKills = document.getElementById('pauseKills');
+        const pauseWeapon = document.getElementById('pauseWeapon');
+        const pauseWeaponLevel = document.getElementById('pauseWeaponLevel');
+        const upgradeCost = document.getElementById('upgradeCost');
+        
+        if (pauseScore) pauseScore.textContent = gameState.score;
+        if (pauseRound) pauseRound.textContent = gameState.round;
+        if (pauseKills) pauseKills.textContent = gameState.totalKills;
+        
+        const weapon = weapons[currentWeapon];
+        if (pauseWeapon) pauseWeapon.textContent = weapon.name;
+        if (pauseWeaponLevel) pauseWeaponLevel.textContent = weapon.level;
+        if (upgradeCost) upgradeCost.textContent = weapon.level * 500;
+        
         document.getElementById('pauseMenu').style.display = 'block';
         document.exitPointerLock();
     } else {
         document.getElementById('pauseMenu').style.display = 'none';
+        document.getElementById('achievementsModal').style.display = 'none';
+        document.getElementById('scoresModal').style.display = 'none';
         document.body.requestPointerLock();
     }
 }
@@ -900,7 +1618,10 @@ function shoot() {
     lastShootTime = currentTime;
     weapon.ammo--;
 
-    // Анимация отдачи оружия (небольшая)
+    // Звук выстрела
+    if (sounds.shoot) sounds.shoot();
+
+    // Анимация отдачи оружия
     if (hands) {
         const recoil = new THREE.Vector3(0, 0.05, 0.1);
         hands.position.add(recoil);
@@ -920,16 +1641,249 @@ function shoot() {
     updateUI();
 }
 
-function createBullet(weapon) {
-    const bulletGeometry = new THREE.SphereGeometry(0.3, 8, 8);
-    const bulletMaterial = new THREE.MeshStandardMaterial({
-        color: 0xffff00,
-        emissive: 0xffaa00,
-        emissiveIntensity: 2,
+// Гранаты
+function throwGrenade() {
+    if (player.grenades <= 0) return;
+    
+    player.grenades--;
+    
+    const grenadeGeometry = new THREE.SphereGeometry(0.5, 16, 16);
+    const grenadeMaterial = new THREE.MeshStandardMaterial({
+        color: 0x333333,
         metalness: 0.8,
-        roughness: 0.2
+        roughness: 0.3
     });
-    const bullet = new THREE.Mesh(bulletGeometry, bulletMaterial);
+    const grenade = new THREE.Mesh(grenadeGeometry, grenadeMaterial);
+    
+    grenade.position.copy(camera.position);
+    const direction = new THREE.Vector3(0, 0, -1);
+    direction.applyQuaternion(camera.quaternion);
+    direction.y += 0.3; // Бросок вверх
+    direction.normalize();
+    
+    grenade.userData = {
+        velocity: direction.multiplyScalar(0.8),
+        life: 3.0,
+        explosive: true
+    };
+    
+    scene.add(grenade);
+    grenades.push(grenade);
+    updateUI();
+}
+
+function updateGrenades(delta) {
+    grenades = grenades.filter(grenade => {
+        grenade.position.add(grenade.userData.velocity);
+        grenade.userData.velocity.y -= 0.02; // Гравитация
+        grenade.rotation.x += 0.2;
+        grenade.rotation.y += 0.1;
+        
+        grenade.userData.life -= delta;
+        
+        if (grenade.userData.life <= 0 || grenade.position.y < GROUND_LEVEL) {
+            // Взрыв
+            createGrenadeExplosion(grenade.position);
+            scene.remove(grenade);
+            return false;
+        }
+        
+        return true;
+    });
+}
+
+function createGrenadeExplosion(position) {
+    if (sounds.explosion) sounds.explosion();
+    
+    // Урон врагам в радиусе
+    const explosionRadius = 20;
+    enemies.forEach(enemy => {
+        const distance = enemy.position.distanceTo(position);
+        if (distance < explosionRadius) {
+            const damage = 200 * (1 - distance / explosionRadius);
+            enemy.userData.health -= damage;
+            
+            if (enemy.userData.health <= 0) {
+                gameState.explosiveKills++;
+                checkAchievements();
+            }
+        }
+    });
+    
+    // Визуальный эффект
+    const particleCount = 50;
+    for (let i = 0; i < particleCount; i++) {
+        const geometry = new THREE.SphereGeometry(0.5, 8, 8);
+        const material = new THREE.MeshBasicMaterial({
+            color: Math.random() > 0.5 ? 0xff4500 : 0xffaa00
+        });
+        const particle = new THREE.Mesh(geometry, material);
+        
+        particle.position.copy(position);
+        const velocity = new THREE.Vector3(
+            (Math.random() - 0.5) * 0.8,
+            (Math.random() - 0.5) * 0.8,
+            (Math.random() - 0.5) * 0.8
+        );
+        
+        scene.add(particle);
+        
+        let life = 1.0;
+        const animateParticle = () => {
+            particle.position.add(velocity);
+            velocity.y -= 0.02;
+            life -= 0.02;
+            particle.material.opacity = life;
+            particle.material.transparent = true;
+            
+            if (life > 0) {
+                requestAnimationFrame(animateParticle);
+            } else {
+                scene.remove(particle);
+            }
+        };
+        animateParticle();
+    }
+    
+    // Световая вспышка
+    const flash = new THREE.PointLight(0xff4500, 10, 50);
+    flash.position.copy(position);
+    scene.add(flash);
+    setTimeout(() => scene.remove(flash), 200);
+}
+
+// Способности
+function activateShield() {
+    const ability = player.abilities.shield;
+    const currentTime = clock.getElapsedTime();
+    
+    if (currentTime - ability.lastUsed < ability.cooldown) {
+        console.log('Щит на перезарядке!');
+        return;
+    }
+    
+    ability.active = true;
+    ability.lastUsed = currentTime;
+    
+    console.log('🛡️ Щит активирован!');
+    
+    // Визуальный эффект щита
+    const shieldGeometry = new THREE.SphereGeometry(8, 32, 32);
+    const shieldMaterial = new THREE.MeshBasicMaterial({
+        color: 0x00ffff,
+        transparent: true,
+        opacity: 0.3,
+        side: THREE.DoubleSide
+    });
+    const shield = new THREE.Mesh(shieldGeometry, shieldMaterial);
+    camera.add(shield);
+    
+    setTimeout(() => {
+        ability.active = false;
+        camera.remove(shield);
+        console.log('Щит деактивирован');
+    }, ability.duration * 1000);
+}
+
+function activateRage() {
+    const ability = player.abilities.rage;
+    const currentTime = clock.getElapsedTime();
+    
+    if (currentTime - ability.lastUsed < ability.cooldown) {
+        console.log('Ярость на перезарядке!');
+        return;
+    }
+    
+    ability.active = true;
+    ability.lastUsed = currentTime;
+    
+    console.log('😈 Ярость активирована!');
+    
+    // Увеличиваем урон всех оружий
+    Object.keys(weapons).forEach(key => {
+        weapons[key].damage *= 2;
+    });
+    
+    // Эффект красного экрана
+    document.body.style.background = 'rgba(255, 0, 0, 0.2)';
+    
+    setTimeout(() => {
+        ability.active = false;
+        Object.keys(weapons).forEach(key => {
+            weapons[key].damage /= 2;
+        });
+        document.body.style.background = '#000';
+        console.log('Ярость закончилась');
+    }, ability.duration * 1000);
+}
+
+// Система улучшения оружия
+function upgradeWeapon() {
+    const weapon = weapons[currentWeapon];
+    
+    if (weapon.level >= weapon.maxLevel) {
+        console.log('Оружие уже на максимальном уровне!');
+        return;
+    }
+    
+    const upgradeCost = weapon.level * 500;
+    
+    if (gameState.score < upgradeCost) {
+        console.log(`Недостаточно очков! Нужно: ${upgradeCost}, Есть: ${gameState.score}`);
+        return;
+    }
+    
+    gameState.score -= upgradeCost;
+    weapon.level++;
+    
+    // Улучшения
+    weapon.damage = Math.floor(weapon.damage * 1.2);
+    weapon.maxAmmo = Math.floor(weapon.maxAmmo * 1.1);
+    weapon.ammo = weapon.maxAmmo;
+    weapon.reloadTime *= 0.9;
+    weapon.spread *= 0.9;
+    
+    console.log(`✨ ${weapon.name} улучшен до уровня ${weapon.level}!`);
+    if (sounds.pickup) sounds.pickup();
+    updateUI();
+}
+
+function createBullet(weapon) {
+    let bullet;
+    
+    // Лазер - особая визуализация
+    if (currentWeapon === 'laser') {
+        const laserGeometry = new THREE.CylinderGeometry(0.1, 0.1, 100, 8);
+        const laserMaterial = new THREE.MeshBasicMaterial({
+            color: 0x00ffff,
+            emissive: 0x00ffff,
+            emissiveIntensity: 2,
+            transparent: true,
+            opacity: 0.8
+        });
+        bullet = new THREE.Mesh(laserGeometry, laserMaterial);
+        bullet.rotation.x = Math.PI / 2;
+    } else if (weapon.explosive) {
+        // Граната из гранатомета
+        const grenadeGeometry = new THREE.SphereGeometry(0.4, 12, 12);
+        const grenadeMaterial = new THREE.MeshStandardMaterial({
+            color: 0x222222,
+            metalness: 0.7,
+            roughness: 0.4
+        });
+        bullet = new THREE.Mesh(grenadeGeometry, grenadeMaterial);
+    } else {
+        // Обычная пуля
+        const bulletGeometry = new THREE.SphereGeometry(0.3, 8, 8);
+        const bulletMaterial = new THREE.MeshStandardMaterial({
+            color: currentWeapon === 'sniper' ? 0xff0000 : 0xffff00,
+            emissive: currentWeapon === 'sniper' ? 0xaa0000 : 0xffaa00,
+            emissiveIntensity: 2,
+            metalness: 0.8,
+            roughness: 0.2
+        });
+        bullet = new THREE.Mesh(bulletGeometry, bulletMaterial);
+    }
 
     bullet.position.copy(camera.position);
     
@@ -941,10 +1895,14 @@ function createBullet(weapon) {
     direction.y += (Math.random() - 0.5) * weapon.spread;
     direction.normalize();
     
+    const speed = currentWeapon === 'laser' ? 5 : (currentWeapon === 'sniper' ? 6 : 3);
+    
     bullet.userData = {
-        velocity: direction.multiplyScalar(3),
-        life: 3,
-        damage: weapon.damage
+        velocity: direction.multiplyScalar(speed),
+        life: currentWeapon === 'laser' ? 0.1 : (weapon.explosive ? 5 : 3),
+        damage: weapon.damage * (weapon.level || 1),
+        explosive: weapon.explosive || false,
+        weaponType: currentWeapon
     };
 
     scene.add(bullet);
@@ -980,6 +1938,9 @@ function reloadWeapon() {
     console.log('✅ Начинаем перезарядку...');
     gameState.isReloading = true;
     gameState.reloadStartTime = clock.getElapsedTime();
+    
+    // Звук перезарядки
+    if (sounds.reload) sounds.reload();
     
     const reloadIndicator = document.getElementById('reloadIndicator');
     if (reloadIndicator) {
@@ -1052,6 +2013,12 @@ function update() {
         player.velocity.x = moveDirection.x * speed;
         player.velocity.z = moveDirection.z * speed;
         
+        // Звук шагов
+        if (currentTime - lastStepTime > 0.5 && player.isGrounded) {
+            if (sounds.step) sounds.step();
+            lastStepTime = currentTime;
+        }
+        
         // Отладка (показываем раз в 100 кадров)
         if (Math.random() < 0.02) {
             console.log(`✅ ДВИЖЕНИЕ! velocity=(${player.velocity.x.toFixed(2)}, ${player.velocity.z.toFixed(2)}), pos=(${player.position.x.toFixed(1)}, ${player.position.z.toFixed(1)})`);
@@ -1100,6 +2067,14 @@ function update() {
 
     // Обновление пуль
     updateBullets(delta);
+    
+    // Обновление гранат
+    updateGrenades(delta);
+    
+    // Обновление таймера выживания
+    if (gameState.gameMode === 'survival' && gameState.isPlaying) {
+        gameState.survivalTime = currentTime - gameState.survivalStartTime;
+    }
 
     // Проверка завершения раунда
     checkRoundComplete();
@@ -1129,6 +2104,10 @@ function checkHealthPackPickup() {
             player.health = Math.min(player.health + 50, player.maxHealth);
             scene.remove(pack);
             healthPacks.splice(i, 1);
+            
+            // Звук подбора
+            if (sounds.pickup) sounds.pickup();
+            
             updateUI();
             
             // Респаун аптечки через 20 секунд
@@ -1177,6 +2156,7 @@ function updateEnemies(delta) {
 
         const enemyPos = enemy.position;
         const distance = enemyPos.distanceTo(player.position);
+        const isFlying = enemy.userData.enemyType === 'flying';
 
         // Анимация
         if (enemy.userData.parts) {
@@ -1193,6 +2173,12 @@ function updateEnemies(delta) {
                 weapon.rotation.z = Math.sin(currentTime * 2 + offset) * 0.1;
             }
         }
+        
+        // Анимация пропеллера для летающих врагов
+        if (isFlying && enemy.userData.propeller) {
+            enemy.userData.propeller.rotation.z += 0.5;
+            enemy.position.y = GROUND_LEVEL + 15 + Math.sin(currentTime * 2 + enemy.userData.animationOffset) * 2;
+        }
 
         // AI
         if (distance < enemy.userData.detectionRadius) {
@@ -1204,9 +2190,15 @@ function updateEnemies(delta) {
             newEnemyPos.x += direction.x * enemy.userData.speed;
             newEnemyPos.z += direction.z * enemy.userData.speed;
             
+            // Летающие враги могут двигаться по Y
+            if (isFlying) {
+                newEnemyPos.y += direction.y * enemy.userData.speed * 0.5;
+            }
+            
             if (!checkEnemyCollision(newEnemyPos)) {
                 enemyPos.x = newEnemyPos.x;
                 enemyPos.z = newEnemyPos.z;
+                if (isFlying) enemyPos.y = newEnemyPos.y;
             }
 
             const lookAtPos = player.position.clone();
@@ -1216,7 +2208,7 @@ function updateEnemies(delta) {
             if (distance < enemy.userData.attackRadius &&
                 currentTime - enemy.userData.lastAttackTime > enemy.userData.attackCooldown) {
                 enemy.userData.lastAttackTime = currentTime;
-                damagePlayer(15 + gameState.round * 2);
+                damagePlayer(enemy.userData.damage);
                 
                 if (enemy.userData.parts) {
                     const body = enemy.userData.parts.body;
@@ -1239,6 +2231,10 @@ function updateBullets(delta) {
         bullet.userData.life -= delta;
 
         if (bullet.userData.life <= 0) {
+            // Взрыв для гранатометных снарядов
+            if (bullet.userData.explosive) {
+                createGrenadeExplosion(bullet.position);
+            }
             scene.remove(bullet);
             return false;
         }
@@ -1249,14 +2245,39 @@ function updateBullets(delta) {
             const distance = bullet.position.distanceTo(enemy.position);
 
             if (distance < 6) {
+                // Взрыв от гранатомета
+                if (bullet.userData.explosive) {
+                    createGrenadeExplosion(bullet.position);
+                    scene.remove(bullet);
+                    return false;
+                }
+                
                 enemy.userData.health -= bullet.userData.damage;
+                
+                // Звук попадания
+                if (sounds.hit) sounds.hit();
 
                 if (enemy.userData.health <= 0) {
+                    const isBoss = enemy.userData.isBoss;
+                    const isSniper = bullet.userData.weaponType === 'sniper';
+                    
                     createExplosion(enemy.position);
                     scene.remove(enemy);
                     enemies.splice(i, 1);
-                    gameState.score += 100;
+                    
+                    gameState.score += isBoss ? 1000 : 100;
                     gameState.enemiesKilled++;
+                    gameState.totalKills++;
+                    
+                    // Проверка достижений
+                    if (isBoss) {
+                        unlockAchievement('boss');
+                        console.log('🏆 БОСС УБИТ!');
+                    }
+                    if (isSniper) {
+                        unlockAchievement('headshot');
+                    }
+                    checkAchievements();
                     
                     console.log(`💀 Враг убит! Всего убито: ${gameState.enemiesKilled}/${gameState.enemiesInRound}`);
                     
@@ -1283,7 +2304,11 @@ function updateBullets(delta) {
         for (let wall of walls) {
             const wallBox = new THREE.Box3().setFromObject(wall);
             if (wallBox.containsPoint(bullet.position)) {
-                createSparks(bullet.position);
+                if (bullet.userData.explosive) {
+                    createGrenadeExplosion(bullet.position);
+                } else {
+                    createSparks(bullet.position);
+                }
                 scene.remove(bullet);
                 return false;
             }
@@ -1350,6 +2375,14 @@ function createSparks(position) {
 }
 
 function damagePlayer(damage) {
+    // Проверка щита
+    if (player.abilities.shield.active) {
+        console.log('🛡️ Урон заблокирован щитом!');
+        return;
+    }
+    
+    gameState.damageTakenThisRound += damage;
+    
     player.health -= damage;
     player.health = Math.max(0, player.health);
     updateUI();
@@ -1368,6 +2401,9 @@ function gameOver() {
     gameState.isPlaying = false;
     gameState.isGameOver = true;
     
+    // Сохранение рекорда
+    saveHighScore();
+    
     document.getElementById('finalScore').textContent = gameState.score;
     document.getElementById('finalRound').textContent = gameState.round;
     document.getElementById('gameOver').style.display = 'block';
@@ -1376,7 +2412,7 @@ function gameOver() {
 }
 
 function updateUI() {
-    document.getElementById('healthValue').textContent = player.health;
+    document.getElementById('healthValue').textContent = Math.floor(player.health);
     document.getElementById('scoreValue').textContent = gameState.score;
     document.getElementById('roundValue').textContent = gameState.round;
     document.getElementById('enemiesValue').textContent = 
@@ -1385,6 +2421,34 @@ function updateUI() {
     const weapon = weapons[currentWeapon];
     document.getElementById('weaponName').textContent = weapon.name;
     document.getElementById('ammoValue').textContent = `${weapon.ammo}/${weapon.maxAmmo}`;
+    
+    // Обновление дополнительной информации
+    const weaponLevelEl = document.getElementById('weaponLevel');
+    if (weaponLevelEl) {
+        weaponLevelEl.textContent = weapon.level;
+    }
+    
+    const grenadesEl = document.getElementById('grenadesValue');
+    if (grenadesEl) {
+        grenadesEl.textContent = player.grenades;
+    }
+    
+    const survivalTimeEl = document.getElementById('survivalTime');
+    if (survivalTimeEl && gameState.gameMode === 'survival') {
+        const minutes = Math.floor(gameState.survivalTime / 60);
+        const seconds = Math.floor(gameState.survivalTime % 60);
+        survivalTimeEl.textContent = `${minutes}:${seconds.toString().padStart(2, '0')}`;
+    }
+    
+    const mapNameEl = document.getElementById('mapName');
+    if (mapNameEl) {
+        mapNameEl.textContent = maps[currentMap].name;
+    }
+    
+    const difficultyEl = document.getElementById('difficultyName');
+    if (difficultyEl) {
+        difficultyEl.textContent = difficulties[currentDifficulty].name;
+    }
     
     // Обновление отладочной панели
     updateDebugPanel();
@@ -1416,6 +2480,57 @@ function animate() {
     requestAnimationFrame(animate);
     update();
     renderer.render(scene, camera);
+    
+    // Рендеринг миникарты
+    if (minimapCamera && gameState.isPlaying) {
+        minimapCamera.position.x = player.position.x;
+        minimapCamera.position.z = player.position.z;
+        
+        const minimapCanvas = document.getElementById('minimapCanvas');
+        if (minimapCanvas) {
+            const ctx = minimapCanvas.getContext('2d');
+            
+            // Очистка
+            ctx.fillStyle = 'rgba(0, 0, 0, 0.5)';
+            ctx.fillRect(0, 0, 200, 200);
+            
+            // Рисуем врагов
+            ctx.fillStyle = 'red';
+            enemies.forEach(enemy => {
+                const relX = (enemy.position.x - player.position.x) + 100;
+                const relZ = (enemy.position.z - player.position.z) + 100;
+                if (relX >= 0 && relX <= 200 && relZ >= 0 && relZ <= 200) {
+                    ctx.fillRect(relX - 2, relZ - 2, 4, 4);
+                }
+            });
+            
+            // Рисуем аптечки
+            ctx.fillStyle = 'lime';
+            healthPacks.forEach(pack => {
+                if (!pack.parent) return;
+                const relX = (pack.position.x - player.position.x) + 100;
+                const relZ = (pack.position.z - player.position.z) + 100;
+                if (relX >= 0 && relX <= 200 && relZ >= 0 && relZ <= 200) {
+                    ctx.fillRect(relX - 1, relZ - 1, 2, 2);
+                }
+            });
+            
+            // Рисуем игрока (в центре)
+            ctx.fillStyle = 'cyan';
+            ctx.beginPath();
+            ctx.arc(100, 100, 4, 0, Math.PI * 2);
+            ctx.fill();
+            
+            // Направление взгляда
+            ctx.strokeStyle = 'cyan';
+            ctx.lineWidth = 2;
+            ctx.beginPath();
+            ctx.moveTo(100, 100);
+            const lookAngle = player.rotation.y;
+            ctx.lineTo(100 + Math.sin(lookAngle) * 15, 100 - Math.cos(lookAngle) * 15);
+            ctx.stroke();
+        }
+    }
 }
 
 // Запуск

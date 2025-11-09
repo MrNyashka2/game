@@ -304,32 +304,96 @@
             <div id="score">🎯 Счет: <span id="scoreValue">0</span></div>
             <div id="round">🌊 Раунд: <span id="roundValue">1</span></div>
             <div id="enemies">👾 Враги: <span id="enemiesValue">0/5</span></div>
+            <div id="difficulty" style="color: #ffa500; margin-top: 5px;">
+                ⚔️ <span id="difficultyName">Нормально</span>
+            </div>
+            <div id="map" style="color: #87ceeb; margin-top: 5px;">
+                🗺️ <span id="mapName">Поле боя</span>
+            </div>
+            <div id="survival" style="color: #ffff00; margin-top: 5px; display: none;">
+                ⏱️ Время: <span id="survivalTime">0:00</span>
+            </div>
         </div>
         
         <div id="weaponInfo">
-            <div id="weapon">🔫 <span id="weaponName">Пистолет</span></div>
+            <div id="weapon">🔫 <span id="weaponName">Пистолет</span> ⭐<span id="weaponLevel">1</span></div>
             <div id="ammo">📦 <span id="ammoValue">12/12</span></div>
-            <div style="font-size: 14px; margin-top: 5px; color: #999;">
-                <span>1</span> - Пистолет | <span>2</span> - Автомат | <span>3</span> - Дробовик
+            <div id="grenades" style="color: #ff4500; margin-top: 5px;">
+                💣 <span id="grenadesValue">3</span> (G)
             </div>
+            <div style="font-size: 12px; margin-top: 10px; color: #999;">
+                <div>1-Пистолет | 2-Автомат | 3-Дробовик</div>
+                <div style="margin-top: 3px;">4-Снайпер | 5-Гранатомет | 6-Лазер</div>
+                <div style="margin-top: 5px; color: #0ff;">Q-Щит | E-Ярость | U-Апгрейд</div>
+            </div>
+        </div>
+        
+        <!-- Миникарта -->
+        <div id="minimap" style="position: absolute; bottom: 20px; left: 20px; background: rgba(0,0,0,0.7); padding: 10px; border-radius: 10px; border: 2px solid #00ff00;">
+            <div style="color: #00ff00; margin-bottom: 5px; text-align: center; font-size: 14px;">📍 Карта</div>
+            <canvas id="minimapCanvas" width="200" height="200" style="display: block; border: 1px solid #00ff00;"></canvas>
         </div>
         
         <div id="instructions">
             <h1>🎮 3D FPS СТРЕЛЯЛКА</h1>
-            <h3 style="color: #00aaff; margin-bottom: 15px;">⚡ УЛУЧШЕННАЯ ВЕРСИЯ ⚡</h3>
-            <ul>
-                <li>🎯 <strong>WASD</strong> - Движение</li>
-                <li>🖱️ <strong>Мышь</strong> - Обзор</li>
-                <li>🔫 <strong>ЛКМ</strong> - Стрельба</li>
-                <li>⚡ <strong>Shift</strong> - Бег</li>
-                <li>🦘 <strong>Пробел</strong> - Прыжок</li>
-                <li>🔄 <strong>R</strong> - Перезарядка</li>
-                <li>🔫 <strong>1, 2, 3</strong> - Смена оружия</li>
-                <li>💊 <strong>Красные кубы</strong> - Аптечки (+50 HP)</li>
-                <li>⏸️ <strong>ESC</strong> - Пауза</li>
-                <li>🌊 <strong>Система раундов</strong> - Враги усиливаются!</li>
-            </ul>
-            <button id="startButton">НАЧАТЬ ИГРУ</button>
+            <h3 style="color: #ffd700; margin-bottom: 15px;">🌟 СУПЕР ВЕРСИЯ 2.0 🌟</h3>
+            
+            <div style="display: grid; grid-template-columns: 1fr 1fr; gap: 10px; margin-bottom: 20px;">
+                <div style="background: rgba(0,100,0,0.3); padding: 10px; border-radius: 5px;">
+                    <h4 style="color: #0f0; margin: 0 0 10px 0;">⚔️ Основное</h4>
+                    <ul style="margin: 0; padding-left: 20px; font-size: 14px;">
+                        <li><strong>WASD</strong> - Движение</li>
+                        <li><strong>Мышь</strong> - Обзор</li>
+                        <li><strong>ЛКМ</strong> - Стрельба</li>
+                        <li><strong>Shift</strong> - Бег</li>
+                        <li><strong>Пробел</strong> - Прыжок</li>
+                        <li><strong>R</strong> - Перезарядка</li>
+                    </ul>
+                </div>
+                
+                <div style="background: rgba(100,0,0,0.3); padding: 10px; border-radius: 5px;">
+                    <h4 style="color: #f00; margin: 0 0 10px 0;">🔫 Оружие</h4>
+                    <ul style="margin: 0; padding-left: 20px; font-size: 14px;">
+                        <li><strong>1</strong> - Пистолет</li>
+                        <li><strong>2</strong> - Автомат</li>
+                        <li><strong>3</strong> - Дробовик</li>
+                        <li><strong>4</strong> - Снайперка 🆕</li>
+                        <li><strong>5</strong> - Гранатомет 🆕</li>
+                        <li><strong>6</strong> - Лазер 🆕</li>
+                    </ul>
+                </div>
+                
+                <div style="background: rgba(0,0,100,0.3); padding: 10px; border-radius: 5px;">
+                    <h4 style="color: #0ff; margin: 0 0 10px 0;">✨ Способности</h4>
+                    <ul style="margin: 0; padding-left: 20px; font-size: 14px;">
+                        <li><strong>G</strong> - Граната 🆕</li>
+                        <li><strong>Q</strong> - Щит (защита) 🆕</li>
+                        <li><strong>E</strong> - Ярость (x2 урон) 🆕</li>
+                        <li><strong>U</strong> - Апгрейд оружия 🆕</li>
+                    </ul>
+                </div>
+                
+                <div style="background: rgba(100,100,0,0.3); padding: 10px; border-radius: 5px;">
+                    <h4 style="color: #ff0; margin: 0 0 10px 0;">🎮 Прочее</h4>
+                    <ul style="margin: 0; padding-left: 20px; font-size: 14px;">
+                        <li><strong>ESC</strong> - Пауза</li>
+                        <li><strong>F3</strong> - Отладка</li>
+                        <li>💊 Аптечки +50 HP</li>
+                        <li>📍 Миникарта внизу</li>
+                    </ul>
+                </div>
+            </div>
+            
+            <div style="background: rgba(255,215,0,0.2); padding: 10px; border-radius: 5px; margin-bottom: 15px;">
+                <h4 style="color: #ffd700; margin: 0 0 5px 0;">⭐ Новые возможности:</h4>
+                <p style="margin: 5px 0; font-size: 14px;">
+                    🎵 Звуки | 🎯 6 видов оружия | 👾 5 типов врагов (быстрые, танки, летающие, боссы) | 
+                    🗺️ 4 карты | ⚔️ 4 уровня сложности | 🏆 Достижения | 📊 Таблица рекордов | 
+                    ⭐ Улучшение оружия | 💣 Гранаты и способности | 📍 Миникарта
+                </p>
+            </div>
+            
+            <button id="startButton" style="padding: 20px 40px; font-size: 20px;">НАЧАТЬ ИГРУ</button>
         </div>
         
         <div id="gameOver">
@@ -341,7 +405,31 @@
         
         <div id="pauseMenu">
             <h1>⏸️ ПАУЗА</h1>
+            
+            <div style="background: rgba(0,50,0,0.5); padding: 15px; border-radius: 10px; margin: 15px 0;">
+                <h3 style="color: #0f0; margin: 0 0 10px 0;">📊 Текущая игра</h3>
+                <div style="font-size: 16px;">
+                    <div>Счет: <span id="pauseScore" style="color: #0f0;">0</span></div>
+                    <div>Раунд: <span id="pauseRound" style="color: #0ff;">1</span></div>
+                    <div>Убито: <span id="pauseKills" style="color: #f00;">0</span></div>
+                </div>
+            </div>
+            
+            <div style="background: rgba(50,0,0,0.5); padding: 15px; border-radius: 10px; margin: 15px 0;">
+                <h3 style="color: #ffd700; margin: 0 0 10px 0;">⚔️ Текущее оружие</h3>
+                <div style="font-size: 16px;">
+                    <div><span id="pauseWeapon">Пистолет</span> (Уровень <span id="pauseWeaponLevel">1</span>)</div>
+                    <div style="margin-top: 10px; font-size: 14px; color: #ff0;">
+                        💡 Нажми <strong>U</strong> для апгрейда (Стоимость: <span id="upgradeCost">500</span> очков)
+                    </div>
+                </div>
+            </div>
+            
             <button id="resumeButton">ПРОДОЛЖИТЬ</button>
+            <br>
+            <button id="viewAchievementsButton" style="background: #ffd700; color: black; margin-top: 10px;">🏆 ДОСТИЖЕНИЯ</button>
+            <br>
+            <button id="viewScoresButton" style="background: #0088ff; color: white; margin-top: 10px;">📊 РЕКОРДЫ</button>
             <br>
             <button id="mainMenuButton">ГЛАВНОЕ МЕНЮ</button>
         </div>
@@ -351,6 +439,20 @@
             <div id="reloadBarContainer">
                 <div id="reloadBar"></div>
             </div>
+        </div>
+        
+        <!-- Модальное окно достижений -->
+        <div id="achievementsModal" style="display: none; position: fixed; top: 50%; left: 50%; transform: translate(-50%, -50%); background: rgba(0,0,0,0.95); padding: 30px; border-radius: 15px; border: 3px solid #ffd700; max-width: 600px; max-height: 80vh; overflow-y: auto; pointer-events: auto; z-index: 10000;">
+            <h2 style="color: #ffd700; margin-top: 0;">🏆 ДОСТИЖЕНИЯ</h2>
+            <div id="achievementsList"></div>
+            <button onclick="document.getElementById('achievementsModal').style.display='none'" style="margin-top: 20px; padding: 10px 20px; background: #ff0000; color: white; border: none; border-radius: 5px; cursor: pointer; font-weight: bold;">ЗАКРЫТЬ</button>
+        </div>
+        
+        <!-- Модальное окно рекордов -->
+        <div id="scoresModal" style="display: none; position: fixed; top: 50%; left: 50%; transform: translate(-50%, -50%); background: rgba(0,0,0,0.95); padding: 30px; border-radius: 15px; border: 3px solid #0088ff; max-width: 600px; max-height: 80vh; overflow-y: auto; pointer-events: auto; z-index: 10000;">
+            <h2 style="color: #0088ff; margin-top: 0;">📊 ТАБЛИЦА РЕКОРДОВ</h2>
+            <div id="scoresList"></div>
+            <button onclick="document.getElementById('scoresModal').style.display='none'; if(document.getElementById('pauseMenu').style.display === 'block') document.body.requestPointerLock();" style="margin-top: 20px; padding: 10px 20px; background: #ff0000; color: white; border: none; border-radius: 5px; cursor: pointer; font-weight: bold;">ЗАКРЫТЬ</button>
         </div>
     </div>
 
